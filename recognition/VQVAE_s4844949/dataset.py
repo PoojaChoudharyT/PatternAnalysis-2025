@@ -297,3 +297,62 @@ def get_dataloaders(root_dir, batch_size=16, normImage=False, categorical=False,
     test_loader = DataLoader(test_dataset, batch_size=batch_size, shuffle=False, num_workers=num_workers)
 
     return train_loader, val_loader, test_loader
+
+
+# ==============================================
+# 5. Visualization Utilities
+# ==============================================
+def visualize_samples(dataloader, num_samples=5, save_path="Output/sample_visualization.png"):
+    """
+    Display a few preprocessed samples from a DataLoader.
+    Saves the figure to disk for reference.
+    """
+    os.makedirs(os.path.dirname(save_path), exist_ok=True)
+    dataset = dataloader.dataset
+
+    plt.figure(figsize=(12, 6))
+    for i in range(min(num_samples, len(dataset))):
+        sample = dataset[i]
+        img_tensor = sample["image"]
+
+        plt.subplot(1, num_samples, i + 1)
+        plt.imshow(img_tensor.squeeze(), cmap="gray")
+        plt.title(f"Sample {i+1}")
+        plt.axis("off")
+
+    plt.tight_layout()
+    plt.savefig(save_path)
+    plt.show()
+    plt.close()
+
+def visualize_original_vs_preprocessed(dataset, num_samples=5):
+    """
+    Compare original raw images with preprocessed images side by side.
+
+    Useful for sanity-checking preprocessing, normalization, or resizing effects.
+
+    Args:
+        dataset: ProstateMRIDataset instance
+        num_samples: Number of samples to visualize
+    """
+    plt.figure(figsize=(10, 4 * num_samples))
+    
+    for i in range(min(num_samples, len(dataset))):
+        original_img = nib.load(dataset.image_files[i]).get_fdata()
+        if original_img.ndim == 3:
+            original_img = original_img[:, :, 0]
+
+        preprocessed_img = dataset.images[i]
+
+        plt.subplot(num_samples, 2, 2*i + 1)
+        plt.imshow(original_img, cmap='gray')
+        plt.title(f"Original Sample {i+1}")
+        plt.axis('off')
+
+        plt.subplot(num_samples, 2, 2*i + 2)
+        plt.imshow(preprocessed_img, cmap='gray')
+        plt.title(f"Preprocessed Sample {i+1}")
+        plt.axis('off')
+
+    plt.tight_layout()
+    plt.show()
