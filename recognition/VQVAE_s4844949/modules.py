@@ -250,6 +250,9 @@ class Decoder(nn.Module):
 class VQVAE(nn.Module):
     """
     Single-level VQ-VAE architecture for 2D prostate MRI slices.
+    Pipeline:
+        Encoder → 1x1 conv (to embedding_dim) → VectorQuantizerEMA
+               → 1x1 conv (to hidden_channels) → Decoder
     """
     def __init__(
         self,
@@ -263,30 +266,86 @@ class VQVAE(nn.Module):
         ema_decay=0.99,
     ):
         super().__init__()
+        self.encoder = Encoder(
+            in_channels=in_channels,
+            hidden_channels=hidden_channels,
+            res_hidden_channels=res_hidden_channels,
+            num_res_layers=num_res_layers,
+        )
+        # project encoder width -> embedding_dim (channels)
+        self.pre_vq = nn.Conv2d(hidden_channels, embedding_dim, kernel_size=1, bias=True)
 
-        # TODO: instantiate encoder, pre-VQ 1x1 conv, VQ, post-VQ conv, and decoder
+        # EMA codebook
+        self.vq = VectorQuantizerEMA(
+            num_embeddings=num_embeddings,
+            embedding_dim=embedding_dim,
+            commitment_cost=commitment_cost,
+            decay=ema_decay,
+        )
+
+        # project quantized latents back to decoder width
+        self.post_vq = nn.Conv2d(embedding_dim, hidden_channels, kernel_size=1, bias=True)
+
+        self.decoder = Decoder(
+            out_channels=in_channels,
+            hidden_channels=hidden_channels,
+            res_hidden_channels=res_hidden_channels,
+            num_res_layers=num_res_layers,
+        )
 
 
-    def encode(self, x):
-        # TODO: encode + quantize
-        return None
+    def encode(self, x: torch.Tensor):
+        """
+        Returns:
+            z_e: pre-quantization latents [B, D, H', W']
+            z_q: quantized latents [B, D, H', W']
+            vq_loss: commitment loss (scalar)
+            perplexity: codebook usage
+            indices: code indices [B, H', W']
+        """
+        z = self.encoder(x)                 # [B, hidden, H', W']
+        z_e = self.pre_vq(z)                # [B, emb_dim, H', W']
+        z_q, vq_loss, perplexity, _, idx = self.vq(z_e)
+        return z_e, z_q, vq_loss, perplexity, idx
 
 
-    def decode(self, z_q):
-        # TODO: decode back to image
-        return None
+    def decode(self, z_q: torch.Tensor):
+        z_q_up = self.post_vq(z_q)          # [B, hidden, H', W']
+        x_logits = self.decoder(z_q_up)     # logits
+        return x_logits
 
 
-    def forward(self, x, recon_loss_type="l1"):
+    def forward(self, x: torch.Tensor, recon_loss_type: str ="l1"):
         """
         Forward pass through VQ-VAE.
+        x: [B,1,H,W] in [0,1]
+        recon_loss_type: "l1" or "bce"
         Returns:
             dict containing:
               - loss_total
               - loss_recon
               - loss_vq
               - perplexity
-              - x_recon
+              - x_recon_logits, x_recon (sigmoid), z_q
         """
-        # TODO: full forward pass
-        return {}
+        z_e, z_q, vq_loss, perplexity, _ = self.encode(x)
+        x_recon_logits = self.decode(z_q)
+
+        if recon_loss_type.lower() == "bce":
+            loss_recon = F.binary_cross_entropy_with_logits(x_recon_logits, x)
+            x_recon = torch.sigmoid(x_recon_logits)
+        else:
+            x_recon = torch.sigmoid(x_recon_logits)
+            loss_recon = F.l1_loss(x_recon, x)
+
+        loss_total = loss_recon + vq_loss
+
+        return {
+            "loss_total": loss_total,
+            "loss_recon": loss_recon,
+            "loss_vq": vq_loss,
+            "perplexity": perplexity,
+            "x_recon_logits": x_recon_logits,
+            "x_recon": x_recon,
+            "z_q": z_q,
+        }
