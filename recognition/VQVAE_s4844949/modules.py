@@ -98,10 +98,52 @@ class VectorQuantizerEMA(nn.Module):
     """
     VQ layer using Exponential Moving Average updates.
     Maps continuous latent vectors to discrete codebook entries.
+
+    
     """
-    def __init__(self, num_embeddings, embedding_dim, commitment_cost, decay=0.99):
+    def __init__(
+        self,
+        num_embeddings: int,
+        embedding_dim: int,
+        commitment_cost: float,
+        decay: float = 0.99,
+        eps: float = 1e-5,
+    ):
         super().__init__()
-        # TODO: initialize codebook variables
+        self.num_embeddings = num_embeddings
+        self.embedding_dim = embedding_dim
+        self.beta = commitment_cost
+        self.decay = decay
+        self.eps = eps
+
+        # Codebook: [D, K]
+        embed = torch.randn(embedding_dim, num_embeddings)
+        self.register_buffer("embedding", embed)
+        self.register_buffer("cluster_size", torch.zeros(num_embeddings))
+        self.register_buffer("embed_avg", embed.clone())
+
+
+    @torch.no_grad()
+    def _ema_update(self, flat_inputs: torch.Tensor, encodings: torch.Tensor):
+        """
+        EMA update of codebook statistics.
+        flat_inputs: [N, D], encodings (one-hot): [N, K]
+        """
+        # Accumulate counts and sums
+        cluster_size = encodings.sum(0)                           # [K]
+        embed_sum = flat_inputs.t() @ encodings                   # [D, K]
+
+        # Decay-accumulate
+        self.cluster_size.mul_(self.decay).add_(cluster_size, alpha=1 - self.decay)
+        self.embed_avg.mul_(self.decay).add_(embed_sum, alpha=1 - self.decay)
+
+        # Laplace smoothing of counts to avoid zeros
+        n = self.cluster_size.sum()
+        smoothed_cluster_size = (self.cluster_size + self.eps) / (n + self.num_embeddings * self.eps) * n
+
+        # Normalize to get actual embeddings
+        embed_normalized = self.embed_avg / smoothed_cluster_size.unsqueeze(0)  # [D,K]
+        self.embedding.copy_(embed_normalized)
 
 
     def forward(self, z_e):
@@ -109,12 +151,52 @@ class VectorQuantizerEMA(nn.Module):
         Args:
             z_e: Latent encoder output [B, D, H, W]
         Returns:
-            z_q: Quantized tensor
-            vq_loss: Commitment loss
-            perplexity: Codebook usage metric
+            z_q: quantized latents [B, D, H, W]
+            vq_loss: commitment loss (EMA handles codebook update)
+            encodings: one-hot assignments [B*H*W, K]
+            indices: code indices [B, H, W]
+            perplexity: Codebook usage metric  (Perplexity is a measures which says how many codebook entries are actually being used)
         """
-        # TODO: implement nearest code lookup and EMA update
-        return z_e, torch.tensor(0.), torch.tensor(0.), None, None
+        B, D, H, W = z_e.shape
+        assert D == self.embedding_dim, "Encoder channels must equal embedding_dim"
+
+        # Flatten to [N, D]
+        flat = z_e.permute(0, 2, 3, 1).contiguous().view(-1, D)  # [N, D], N = B*H*W
+
+        # Distances to codebook entries (use ||x||^2 + ||e||^2 - 2x·e)
+        e = self.embedding  # [D, K]
+        dist = (
+            flat.pow(2).sum(1, keepdim=True)                      # [N,1]
+            + e.pow(2).sum(0, keepdim=True)                       # [1,K]
+            - 2 * (flat @ e)                                      # [N,K]
+        )
+
+        # Nearest code for each vector
+        indices = torch.argmin(dist, dim=1)                       # [N]
+        encodings = F.one_hot(indices, num_classes=self.num_embeddings).type(flat.dtype)  # [N,K]
+
+        # Quantize
+        z_q_flat = encodings @ e.t()                # [N,D]
+        z_q = z_q_flat.view(B, H, W, D).permute(0, 3, 1, 2).contiguous()  # [B,D,H,W]
+
+        # EMA updates (no gradients)
+        if self.training:
+            self._ema_update(flat.detach(), encodings.detach())
+
+        # Commitment loss (codebook moved by EMA)
+        vq_loss = self.beta * F.mse_loss(z_e.detach(), z_q)
+
+        # Straight-through estimator
+        z_q = z_e + (z_q - z_e).detach()
+
+        # Perplexity
+        avg_probs = encodings.mean(dim=0)     # [K]
+        perplexity = torch.exp(-torch.sum(avg_probs * torch.log(avg_probs + 1e-10)))
+
+        # Reshape indices for convenience
+        indices = indices.view(B, H, W)
+
+        return z_q, vq_loss, perplexity, encodings, indices
 
 
 
