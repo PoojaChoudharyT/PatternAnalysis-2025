@@ -197,6 +197,31 @@ class VectorQuantizerEMA(nn.Module):
         indices = indices.view(B, H, W)
 
         return z_q, vq_loss, perplexity, encodings, indices
+    
+
+    @torch.no_grad()
+    def init_from_data(self, z_e: torch.Tensor):
+        """
+        Warm-start the codebook from real encoder outputs.
+        z_e: [B, D, H, W]
+        """
+        B, D, H, W = z_e.shape
+        assert D == self.embedding_dim, f"Expected D={self.embedding_dim}, got {D}"
+        flat = z_e.permute(0, 2, 3, 1).contiguous().view(-1, D)  # [N, D]
+        N = flat.size(0)
+        # If N < K, repeat to have enough samples
+        if N < self.num_embeddings:
+            reps = (self.num_embeddings + N - 1) // N
+            flat = flat.repeat(reps, 1)
+
+        # Pick K random vectors from data as initial codebook
+        idx = torch.randperm(flat.size(0), device=flat.device)[: self.num_embeddings]
+        chosen = flat[idx].t().contiguous()  # [D, K]
+
+        # Initialize EMA buffers
+        self.embedding.copy_(chosen)
+        self.embed_avg.copy_(chosen)
+        self.cluster_size.copy_(torch.ones(self.num_embeddings, device=flat.device))
 
 
 
