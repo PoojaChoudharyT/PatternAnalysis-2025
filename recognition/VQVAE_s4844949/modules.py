@@ -123,15 +123,43 @@ class VectorQuantizerEMA(nn.Module):
 class Decoder(nn.Module):
     """
     Reconstructs MRI slice from quantized latent vectors.
+
+    Upsampling decoder for MRI slices.
+
+    Two ConvTranspose2d layers upsample spatially by 4× in total to
+    recover the input resolution (e.g., 64×32 → 128×64 → 256×128).
+
+    Args:
+        out_channels:          output channels (1 for grayscale)
+        hidden_channels:       base channel width (match Encoder hidden)
+        res_hidden_channels:   hidden width in residual layers
+        num_res_layers:        number of residual layers in the stack
     """
-    def __init__(self, out_channels, hidden_channels, res_hidden_channels, num_res_layers):
+    def __init__(
+            self,
+        out_channels: int = 1,
+        hidden_channels: int = 128,
+        res_hidden_channels: int = 64,
+        num_res_layers: int = 2,
+    ):
         super().__init__()
-        # TODO: define transpose-conv decoding path + residual stack
+        hc = hidden_channels
+        self.net = nn.Sequential(
+            # bottleneck mixing
+            nn.Conv2d(hc, hc, kernel_size=3, stride=1, padding=1, bias=True),
+            ResidualStack(hc, res_hidden_channels, num_res_layers),
 
+            # upsample ×2
+            nn.ConvTranspose2d(hc, hc // 2, kernel_size=4, stride=2, padding=1, bias=True),
+            nn.ReLU(inplace=True),
 
-    def forward(self, z):
-        # TODO: forward decode
-        return z
+            # upsample ×2 (total ×4) → logits
+            nn.ConvTranspose2d(hc // 2, out_channels, kernel_size=4, stride=2, padding=1, bias=True),
+            # Note: outputs are logits; apply sigmoid in the loss for [0,1] data
+        )
+
+    def forward(self, z: torch.Tensor) -> torch.Tensor:
+        return self.net(z)
 
 
 
