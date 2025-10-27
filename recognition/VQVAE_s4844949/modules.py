@@ -19,30 +19,37 @@ device = torch.device("cuda" if torch.cuda.is_available() else "cpu")
 
 class ResidualLayer(nn.Module):
     """
-    A single residual layer used inside encoder/decoder stacks.
+    Single 3x3 -> ReLU -> 1x1 residual layer with skip connection.
     """
-    def __init__(self, in_channels, hidden_channels):
+    def __init__(self, in_channels: int, hidden_channels: int):
         super().__init__()
-        # TODO: define internal layers here
+        self.block = nn.Sequential(
+            nn.ReLU(inplace=True),
+            nn.Conv2d(in_channels, hidden_channels, kernel_size=3, stride=1, padding=1, bias=True),
+            nn.ReLU(inplace=True),
+            nn.Conv2d(hidden_channels, in_channels, kernel_size=1, stride=1, padding=0, bias=True),
+        )
 
 
-    def forward(self, x):
-        # TODO: implement forward path
-        return x
+    def forward(self, x: torch.Tensor) -> torch.Tensor:
+        return x + self.block(x)
 
 
 class ResidualStack(nn.Module):
     """
-    Stack of multiple residual layers.
+    A stack of ResidualLayer modules applied sequentially, ending with ReLU.
     """
-    def __init__(self, in_channels, hidden_channels, num_layers):
+    def __init__(self, in_channels: int, hidden_channels: int, num_layers: int):
         super().__init__()
-        # TODO: create ModuleList of ResidualLayer
+        self.layers = nn.ModuleList(
+            [ResidualLayer(in_channels, hidden_channels) for _ in range(num_layers)]
+        )
 
 
-    def forward(self, x):
-        # TODO: apply residual layers sequentially
-        return x
+    def forward(self, x: torch.Tensor) -> torch.Tensor:
+        for layer in self.layers:
+            x = layer(x)
+        return F.relu(x, inplace=True)
 
 
 
