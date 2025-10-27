@@ -34,7 +34,6 @@ class ResidualLayer(nn.Module):
     def forward(self, x: torch.Tensor) -> torch.Tensor:
         return x + self.block(x)
 
-
 class ResidualStack(nn.Module):
     """
     A stack of ResidualLayer modules applied sequentially, ending with ReLU.
@@ -59,15 +58,38 @@ class Encoder(nn.Module):
     """
     Encodes input MRI images into latent space before quantization.
     Output shape: [B, embedding_dim, H/4, W/4]
+
+    Downsampling encoder for MRI slices.
+
+    Reduces spatial size by 4× using two strided convolutions:
+      (H, W) -> (H/2, W/2) -> (H/4, W/4)
+
+    For 256×128 input → 64×32 latent feature map.
     """
-    def __init__(self, in_channels, hidden_channels, res_hidden_channels, num_res_layers):
+    def __init__(
+        self,
+        in_channels: int = 1,
+        hidden_channels: int = 128,
+        res_hidden_channels: int = 64,
+        num_res_layers: int = 2,
+    ):
         super().__init__()
-        # TODO: define encoder convolution blocks + residual stack
+        hc = hidden_channels
+        self.net = nn.Sequential(
+            # ×2 downsample
+            nn.Conv2d(in_channels, hc // 2, kernel_size=4, stride=2, padding=1, bias=True),
+            nn.ReLU(inplace=True),
+            # ×4 downsample total
+            nn.Conv2d(hc // 2, hc, kernel_size=4, stride=2, padding=1, bias=True),
+            nn.ReLU(inplace=True),
+            # bottleneck mixing
+            nn.Conv2d(hc, hc, kernel_size=3, stride=1, padding=1, bias=True),
+            ResidualStack(hc, res_hidden_channels, num_res_layers),
+        )
 
 
-    def forward(self, x):
-        # TODO: pass input through encoder layers
-        return x
+    def forward(self, x: torch.Tensor) -> torch.Tensor:
+        return self.net(x)
 
 
 # Vector Quantizer EMA (Codebook)
