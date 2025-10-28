@@ -184,7 +184,8 @@ class VectorQuantizerEMA(nn.Module):
             self._ema_update(flat.detach(), encodings.detach())
 
         # Commitment loss (codebook moved by EMA)
-        vq_loss = self.beta * F.mse_loss(z_e.detach(), z_q)
+        #vq_loss = self.beta * F.mse_loss(z_e.detach(), z_q)
+        vq_loss = self.beta * F.mse_loss(z_e, z_q.detach())
 
         # Straight-through estimator
         z_q = z_e + (z_q - z_e).detach()

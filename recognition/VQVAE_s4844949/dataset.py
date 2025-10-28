@@ -1,21 +1,15 @@
 """
 Author: Pooja Choudhary
 Student ID: 48449496
+
+
+HiP MRI Data Loader
+
 """ 
 
 
-# ==============================================
-# HiP MRI Data Loader
-# ==============================================
-# This script provides tools to:
-# - Load 2D MRI slices from NIfTI (.nii.gz) files
-# - Filter images by target dimensions
-# - Split dataset into train/validation/test sets safely
-# - Normalize and transform data for PyTorch
-# - Visualize sample images from the dataset
-# ==============================================
 
-#Importing necessary libraries
+
 import numpy as np
 import nibabel as nib
 import os
@@ -26,106 +20,14 @@ from torch.utils.data import Dataset, DataLoader
 from collections import Counter
 from torchvision.transforms import Compose, Grayscale, ToTensor
 from PIL import Image
-from sklearn.model_selection import train_test_split
 import matplotlib.pyplot as plt
+from utils import load_data_2D
 
 
 
-
-# ==============================================
-# Helper Functions
-# ==============================================
-
-def to_channels(arr: np.ndarray, dtype = np.uint8 ) -> np.ndarray:
-
-    """
-    Convert a 2D label image to a one-hot encoded channel representation.
-    Each unique value in the array becomes a separate channel.
-
-    Args:
-        arr (np.ndarray): Input 2D array with categorical labels.
-        dtype: Data type for the output array.
-
-    Returns:
-        np.ndarray: 3D array (H x W x num_channels) one-hot encoded.
-    """
-    
-    channels = np.unique(arr)
-    res = np.zeros(arr.shape + (len(channels), ), dtype = dtype)
-    for c in channels:
-        c = int(c)
-        res[..., c:c +1][arr == c] = 1
-    
-    return res
-
-
-# load medical image functions
-def load_data_2D(imageNames , normImage = False, categorical = False, dtype = np.float32, getAffines = False, early_stop = False):
-    '''
-    Load medical image data from names , cases list provided into a list for each.
-    This function pre - allocates 4D arrays for conv2d to avoid excessive memory usage.
-    normImage : bool(normalise the image 0.0 -1.0)
-    early_stop : Stop loading pre - maturely , leaves arrays mostly empty , for quick loading and testing scripts.
-    '''
-    
-    affines = []
-    
-    #get fixed size
-    num = len(imageNames)
-    first_case = nib.load(imageNames[0]).get_fdata(caching = 'unchanged')
-    if len(first_case.shape) == 3:
-        first_case = first_case[:, :, 0] # sometimes extra dims , remove
-    if categorical:
-        first_case = to_channels(first_case, dtype = dtype)
-        rows, cols, channels = first_case.shape
-        images = np.zeros((num, rows, cols, channels), dtype = dtype)
-    else:
-        rows, cols = first_case.shape
-        images = np.zeros((num, rows, cols), dtype = dtype)
-
-    for i, inName in enumerate(tqdm(imageNames, desc ="Loading the images")):
-        niftiImage = nib.load(inName)
-        inImage = niftiImage.get_fdata(caching ='unchanged') # read disk only
-        affine = niftiImage.affine
-        if len(inImage.shape) == 3:
-            inImage = inImage[:, :, 0] # sometimes extra dims in HipMRI_study data
-            inImage = inImage.astype(dtype)
-        if normImage:
-            #~ inImage = inImage / np. linalg . norm ( inImage )
-            #~ inImage = 255. * inImage / inImage .max ()
-            inImage = (inImage - inImage.mean()) /inImage.std()
-        if categorical:
-            inImage = utils.to_channels ( inImage , dtype = dtype )
-            images [i, :, :, :] = inImage
-        else :
-            images [i, :, :] = inImage
-            
-        affines.append(affine)
-        if i > 20 and early_stop :
-            break
-            
-    if getAffines:
-        return images, affines
-    else:
-        return images
-
-
-
-
-
-# ==============================================
 # 1. Dataset Shape Summary
-# ==============================================
 def summarize_split_shapes(root_dir):
-    """
-    Scan train/validate/test folders, count per-shape frequencies and print summary.
-
-    Args:
-        root_dir (str): Root folder containing dataset splits.
-
-    Returns:
-        Counter: Global shape counts across all splits.
-    """
+    
     split_folders = {
         "train": os.path.join(root_dir, "train"),
         "validate": os.path.join(root_dir, "validate"),
@@ -183,9 +85,9 @@ def summarize_split_shapes(root_dir):
     print("===========================================================\n")
     return global_counter
 
-# ==============================================
+
 # 2. Utility Functions for File Handling
-# ==============================================
+
 def get_all_image_files(root_dir):
     """Recursively collect all .nii.gz files under a root folder."""
     image_files = []
@@ -209,9 +111,8 @@ def filter_image_files_by_dimension(image_files, target_size=(256, 128)):
             valid_images.append(path)
     return valid_images
 
-# ==============================================
-# 3. PyTorch Dataset Class
-# ==============================================
+
+# 3.  ProstateMRI Dataset Class
 class ProstateMRIDataset(Dataset):
     """
     Dataset class for pre-split 2D MRI slices.
@@ -267,16 +168,14 @@ class ProstateMRIDataset(Dataset):
         image_tensor = self.transform(image_pil)
         return {"image": image_tensor, "path": self.image_files[idx]}
 
-# ==============================================
+
 # 4. DataLoader Builder
-# ==============================================
+
 def get_dataloaders(root_dir, batch_size=16, normImage=False, categorical=False,
                     target_size=(256, 128), num_workers=0):
-    """
-    Build PyTorch DataLoaders for train/validate/test splits.
+    
+    #Build PyTorch DataLoaders for train/validate/test splits.
 
-    Automatically handles folders with standard names or keras_slices_* prefixes.
-    """
     train_dir = os.path.join(root_dir, "train")
     val_dir = os.path.join(root_dir, "validate")
     test_dir = os.path.join(root_dir, "test")
@@ -299,9 +198,9 @@ def get_dataloaders(root_dir, batch_size=16, normImage=False, categorical=False,
     return train_loader, val_loader, test_loader
 
 
-# ==============================================
+
 # 5. Visualization Utilities
-# ==============================================
+
 def visualize_samples(dataloader, num_samples=5, save_path="Output/sample_visualization.png"):
     """
     Display a few preprocessed samples from a DataLoader.
