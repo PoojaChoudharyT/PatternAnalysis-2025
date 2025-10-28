@@ -7,7 +7,8 @@ Utility helpers for HipMRI 2D pipelines: dataset, modules, train and predict
 
 """
 
-
+from __future__ import annotations
+import os
 import numpy as np
 import nibabel as nib
 import torch
@@ -15,7 +16,7 @@ import torch.nn.functional as F
 import random
 from tqdm import tqdm
 from typing import Dict
-from __future__ import annotations
+
 
 def get_device():
     return torch.device("cuda" if torch.cuda.is_available() else "cpu")

@@ -2,16 +2,17 @@
 Author: Pooja Choudhary
 Student ID: 48449496
 
-Train the VAVAE model
+Train the VQVAE model
 """
 
+
+from __future__ import annotations
 import torch
 import os
 import json
 import argparse
 from modules import VQVAE
 from dataset import get_dataloaders
-from __future__ import annotations
 from typing import Tuple
 from torch.optim import AdamW
 from torch.optim.lr_scheduler import CosineAnnealingLR
