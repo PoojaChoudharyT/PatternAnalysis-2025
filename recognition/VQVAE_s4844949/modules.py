@@ -10,17 +10,12 @@ import torch.nn as nn
 import torch.nn.functional as F
 
 
-
-device = torch.device("cuda" if torch.cuda.is_available() else "cpu")
-
-
-
 # Residual Blocks
 
 class ResidualLayer(nn.Module):
-    """
-    Single 3x3 -> ReLU -> 1x1 residual layer with skip connection.
-    """
+    
+    #Single 3x3 -> ReLU -> 1x1 residual layer with skip connection.
+   
     def __init__(self, in_channels: int, hidden_channels: int):
         super().__init__()
         self.block = nn.Sequential(
@@ -66,13 +61,7 @@ class Encoder(nn.Module):
 
     For 256×128 input → 64×32 latent feature map.
     """
-    def __init__(
-        self,
-        in_channels: int = 1,
-        hidden_channels: int = 128,
-        res_hidden_channels: int = 64,
-        num_res_layers: int = 2,
-    ):
+    def __init__(self, in_channels: int = 1, hidden_channels: int = 128, res_hidden_channels: int = 64, num_res_layers: int = 2):
         super().__init__()
         hc = hidden_channels
         self.net = nn.Sequential(
@@ -98,17 +87,9 @@ class VectorQuantizerEMA(nn.Module):
     """
     VQ layer using Exponential Moving Average updates.
     Maps continuous latent vectors to discrete codebook entries.
-
-    
     """
-    def __init__(
-        self,
-        num_embeddings: int,
-        embedding_dim: int,
-        commitment_cost: float,
-        decay: float = 0.99,
-        eps: float = 1e-5,
-    ):
+    
+    def __init__(self,  num_embeddings: int, embedding_dim: int, commitment_cost: float, decay: float = 0.99, eps: float = 1e-5):
         super().__init__()
         self.num_embeddings = num_embeddings
         self.embedding_dim = embedding_dim
@@ -125,10 +106,9 @@ class VectorQuantizerEMA(nn.Module):
 
     @torch.no_grad()
     def _ema_update(self, flat_inputs: torch.Tensor, encodings: torch.Tensor):
-        """
-        EMA update of codebook statistics.
-        flat_inputs: [N, D], encodings (one-hot): [N, K]
-        """
+     
+        #flat_inputs: [N, D], encodings (one-hot): [N, K]
+     
         # Accumulate counts and sums
         cluster_size = encodings.sum(0)                           # [K]
         embed_sum = flat_inputs.t() @ encodings                   # [D, K]
@@ -234,8 +214,7 @@ class Decoder(nn.Module):
 
     Upsampling decoder for MRI slices.
 
-    Two ConvTranspose2d layers upsample spatially by 4× in total to
-    recover the input resolution (e.g., 64×32 → 128×64 → 256×128).
+    Two ConvTranspose2d layers upsample spatially by 4× in total to recover the input resolution (e.g., 64×32 → 128×64 → 256×128).
 
     Args:
         out_channels:          output channels (1 for grayscale)
@@ -243,13 +222,8 @@ class Decoder(nn.Module):
         res_hidden_channels:   hidden width in residual layers
         num_res_layers:        number of residual layers in the stack
     """
-    def __init__(
-            self,
-        out_channels: int = 1,
-        hidden_channels: int = 128,
-        res_hidden_channels: int = 64,
-        num_res_layers: int = 2,
-    ):
+    def __init__(self, out_channels: int = 1, hidden_channels: int = 128, res_hidden_channels: int = 64, num_res_layers: int = 2):
+
         super().__init__()
         hc = hidden_channels
         self.net = nn.Sequential(
@@ -271,53 +245,27 @@ class Decoder(nn.Module):
 
 
 
-# VQ-VAE (Main Model)
+# VQ-VAE (Main Model) 
 
 class VQVAE(nn.Module):
     """
     Single-level VQ-VAE architecture for 2D prostate MRI slices.
     Pipeline:
-        Encoder → 1x1 conv (to embedding_dim) → VectorQuantizerEMA
-               → 1x1 conv (to hidden_channels) → Decoder
+        Encoder → 1x1 conv (to embedding_dim) → VectorQuantizerEMA → 1x1 conv (to hidden_channels) → Decoder
     """
-    def __init__(
-        self,
-        in_channels=1,
-        hidden_channels=128,
-        res_hidden_channels=64,
-        num_res_layers=2,
-        embedding_dim=64,
-        num_embeddings=512,
-        commitment_cost=0.25,
-        ema_decay=0.99,
-    ):
+    def __init__(self, in_channels=1, hidden_channels=128, res_hidden_channels=64, num_res_layers=2, embedding_dim=64, num_embeddings=512, commitment_cost=0.25, ema_decay=0.99):
         super().__init__()
-        self.encoder = Encoder(
-            in_channels=in_channels,
-            hidden_channels=hidden_channels,
-            res_hidden_channels=res_hidden_channels,
-            num_res_layers=num_res_layers,
-        )
+        self.encoder = Encoder(in_channels=in_channels, hidden_channels=hidden_channels, res_hidden_channels=res_hidden_channels, num_res_layers=num_res_layers)
         # project encoder width -> embedding_dim (channels)
         self.pre_vq = nn.Conv2d(hidden_channels, embedding_dim, kernel_size=1, bias=True)
 
         # EMA codebook
-        self.vq = VectorQuantizerEMA(
-            num_embeddings=num_embeddings,
-            embedding_dim=embedding_dim,
-            commitment_cost=commitment_cost,
-            decay=ema_decay,
-        )
+        self.vq = VectorQuantizerEMA(num_embeddings=num_embeddings, embedding_dim=embedding_dim, commitment_cost=commitment_cost, decay=ema_decay)
 
         # project quantized latents back to decoder width
         self.post_vq = nn.Conv2d(embedding_dim, hidden_channels, kernel_size=1, bias=True)
 
-        self.decoder = Decoder(
-            out_channels=in_channels,
-            hidden_channels=hidden_channels,
-            res_hidden_channels=res_hidden_channels,
-            num_res_layers=num_res_layers,
-        )
+        self.decoder = Decoder(out_channels=in_channels, hidden_channels=hidden_channels, res_hidden_channels=res_hidden_channels, num_res_layers=num_res_layers)
 
 
     def encode(self, x: torch.Tensor):
@@ -336,42 +284,18 @@ class VQVAE(nn.Module):
 
 
     def decode(self, z_q: torch.Tensor):
-        z_q_up = self.post_vq(z_q)          # [B, hidden, H', W']
-        x_logits = self.decoder(z_q_up)     # logits
-        return x_logits
+        return self.decoder(self.post_vq(z_q))
 
 
-    def forward(self, x: torch.Tensor, recon_loss_type: str ="l1"):
+    def forward(self, x: torch.Tensor):
+        """Return tensors only; no loss computation here.
+        Returns dict with: x_recon_logits, z_q, vq_loss, perplexity
         """
-        Forward pass through VQ-VAE.
-        x: [B,1,H,W] in [0,1]
-        recon_loss_type: "l1" or "bce"
-        Returns:
-            dict containing:
-              - loss_total
-              - loss_recon
-              - loss_vq
-              - perplexity
-              - x_recon_logits, x_recon (sigmoid), z_q
-        """
-        z_e, z_q, vq_loss, perplexity, _ = self.encode(x)
+        _, z_q, vq_loss, perplexity, _ = self.encode(x)
         x_recon_logits = self.decode(z_q)
-
-        if recon_loss_type.lower() == "bce":
-            loss_recon = F.binary_cross_entropy_with_logits(x_recon_logits, x)
-            x_recon = torch.sigmoid(x_recon_logits)
-        else:
-            x_recon = torch.sigmoid(x_recon_logits)
-            loss_recon = F.l1_loss(x_recon, x)
-
-        loss_total = loss_recon + vq_loss
-
         return {
-            "loss_total": loss_total,
-            "loss_recon": loss_recon,
-            "loss_vq": vq_loss,
-            "perplexity": perplexity,
             "x_recon_logits": x_recon_logits,
-            "x_recon": x_recon,
             "z_q": z_q,
-        }
+            "vq_loss": vq_loss,
+            "perplexity": perplexity,
+       }
