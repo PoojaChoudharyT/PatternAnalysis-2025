@@ -18,7 +18,7 @@ from torch.optim import AdamW
 from torch.optim.lr_scheduler import CosineAnnealingLR
 from tqdm import tqdm
 from utils import reconstruction_loss, normalize_minmax_per_image, set_seed, ssim_per_image, save_checkpoint
-from visualization_utils import plot_curves
+from visualization_utils import plot_curves, visualize_codebook_usage
 
 
 # Warm-start codebook from data
@@ -278,6 +278,14 @@ def main(args):
 
         # Plot curves each epoch
         plot_curves(history, args.outdir)
+
+        # Visualize codebook usage every 5 epochs
+        if epoch % 5 == 0:
+            visualize_codebook_usage(
+                model, val_loader, device,
+                save_path=f"{args.outdir}/codebook_usage_epoch_{epoch:03d}.png"
+            )
+
 
         # Step LR scheduler across the epoch's steps (approximate: 1 step/it)
         global_step += len(train_loader)
