@@ -18,6 +18,7 @@ from torch.optim import AdamW
 from torch.optim.lr_scheduler import CosineAnnealingLR
 from tqdm import tqdm
 from utils import reconstruction_loss, normalize_minmax_per_image, set_seed, ssim_per_image, save_checkpoint
+from visualization_utils import plot_curves
 
 
 # Warm-start codebook from data
@@ -274,6 +275,9 @@ def main(args):
                 if patience_counter >= args.patience:
                     print(f"Early stopping triggered at epoch {epoch} — validation SSIM plateaued.")
                     break
+
+        # Plot curves each epoch
+        plot_curves(history, args.outdir)
 
         # Step LR scheduler across the epoch's steps (approximate: 1 step/it)
         global_step += len(train_loader)
