@@ -15,6 +15,7 @@ from tqdm import tqdm
 from dataset import get_dataloaders
 from modules import VQVAE
 from utils import get_device, set_seed, normalize_minmax_per_image, reconstruction_loss, ssim_per_image
+from visualization_utils import visualize_codebook_usage
 
 
 def main():
@@ -114,6 +115,18 @@ def main():
         json.dump({"mean_test_ssim": mean_ssim, "num_samples": saved}, f, indent=2)
 
 
+    # Save montage of pairs
+    if montage_tiles:
+        grid_path = os.path.join(args.outdir, "montage_pairs.png")
+        save_montage(montage_tiles, cols=args.grid_cols, save_path=grid_path,
+                     title="Top: Original, Bottom: Reconstruction")
+
+    # Optional: codebook usage visual
+    if args.viz_codebook:
+        visualize_codebook_usage(model, test_loader, device,
+                                 save_path=os.path.join(args.outdir, "codebook_usage.png"))
+
+
     print(f"Saved {saved} images to: {args.outdir}")
     print("Done.")
 
@@ -121,12 +134,31 @@ def main():
 
 
 def save_panel(orig: np.ndarray, recon: np.ndarray, out_path: str):
-    """Save side-by-side original vs reconstruction panel."""
+    #Save side-by-side original vs reconstruction images.
     os.makedirs(os.path.dirname(out_path), exist_ok=True)
     plt.figure(figsize=(6, 3))
     plt.subplot(1, 2, 1); plt.imshow(orig, cmap="gray"); plt.title("Original"); plt.axis("off")
     plt.subplot(1, 2, 2); plt.imshow(recon, cmap="gray"); plt.title("Reconstruction"); plt.axis("off")
     plt.tight_layout(); plt.savefig(out_path, dpi=180); plt.close()
+
+
+
+
+def save_montage(panels: list[np.ndarray], cols: int, save_path: str, title: str = ""):
+    #Save a montage grid from already prepared (H, W) images in pairs (orig, recon).
+    os.makedirs(os.path.dirname(save_path), exist_ok=True)
+    n = len(panels)
+    rows = int(np.ceil(n / cols))
+    plt.figure(figsize=(3 * cols, 3 * rows))
+    if title: plt.suptitle(title, fontsize=14, y=0.99)
+
+    for i, img in enumerate(panels, start=1):
+        ax = plt.subplot(rows, cols, i)
+        ax.imshow(img, cmap="gray"); ax.axis("off")
+
+    plt.tight_layout(rect=[0, 0, 1, 0.97] if title else None)
+    plt.savefig(save_path, dpi=200)
+    plt.close()
 
 
 
