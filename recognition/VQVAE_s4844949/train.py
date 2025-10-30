@@ -291,25 +291,9 @@ def main(args):
         global_step += len(train_loader)
         step_scheduler(global_step)
 
-    # Final test eval on best checkpoint
-    best_path = None
-    for f in sorted(os.listdir(args.outdir)):
-        if f.startswith("checkpoint_best_ssim_") and f.endswith(".pt"):
-            best_path = os.path.join(args.outdir, f)
-    if best_path:
-        print(f"\nLoading best checkpoint for test: {best_path}")
-        ckpt = torch.load(best_path, map_location=device)
-        model.load_state_dict(ckpt["model_state"])
-
-    te_loss, te_ssim, te_ppl = evaluate(model, test_loader, device, recon_kind=args.recon_kind)
-    print(f"\nTEST: loss={te_loss:.4f}  ssim={te_ssim:.3f}  ppl={te_ppl:.2f}")
-
     # Save summary JSON 
     summary = {
         "best_val_ssim": best_val_ssim,
-        "final_test_loss": te_loss,
-        "final_test_ssim": te_ssim,
-        "final_test_ppl": te_ppl,
         "history": history,
     }
     with open(os.path.join(args.outdir, "summary.json"), "w") as f:
