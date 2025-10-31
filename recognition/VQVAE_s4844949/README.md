@@ -239,7 +239,7 @@ Epochs Trained : 20
 - Loss curves decreased in a canonical way, through the time of the epochs.
 - SSIM values displayed steady growth, peaking around ~0.93 on the validation set.
 - Perplexity values were stabilized around 320-340, indicating robust codebook activity
-![Alt text](Images/Training_Loss_SSIM_PP.jpg)
+![Alt text](Images/Training_Loss_SSIM_PP.jpeg)
 
 
 **Training Codebook Usage at epoch 20**
@@ -299,6 +299,7 @@ Future directions for this project are investigating multi-scale or hierarchical
 4. Kingma, D. P., & Welling, M. (2014). *Auto-Encoding Variational Bayes.*  *International Conference on Learning Representations (ICLR).  [https://arxiv.org/abs/1312.6114](https://arxiv.org/abs/1312.6114)
 
 5. Loshchilov, I., & Hutter, F. (2019). *Decoupled Weight Decay Regularization (AdamW).* *International Conference on Learning Representations (ICLR).[https://arxiv.org/abs/1711.05101](https://arxiv.org/abs/1711.05101)
+
 
 
 
