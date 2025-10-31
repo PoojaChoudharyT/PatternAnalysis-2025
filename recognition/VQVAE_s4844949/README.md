@@ -16,6 +16,8 @@ As a result, VQVAE can maintain these advantages; more stable latent representat
 
 ## Implementation of VQVAE
 
+![Alt text](Images/VQVAE_Implementation.png)
+
 **Architecture Components are as follows:**
 
 **Encoder:** The encoder compresses the 2D MRI slices with three convolutional layers, two strid for 4x down-sampling and one more for feature refinement into a residual stack layer that preserve structural detail.
@@ -83,8 +85,11 @@ EMA updates are done outside from gradient descent, this makes sure that we have
 
 Following image contains the details about the dataset.
 
+![Alt text](Images/Dataset_Global_Details.png)
+
 Dataset splits and image size details can be seen in following image.
 
+![Alt text](Images/Dataset_Split_details.png)
 
 **Data Normalization**
 
@@ -119,6 +124,7 @@ Dataset splits and image size details can be seen in following image.
 
 **Original vs Preprocessed data**
 
+![Alt text](Images/Original_vs_Preprocessed_Data.png)
 
 ## Project Structure
 
@@ -218,6 +224,7 @@ Dataset splits and image size details can be seen in following image.
 
 ## Training outputs
 
+![Alt text](Images/Training_Output.png)
 
 **Results summary:**
 
@@ -231,13 +238,16 @@ Epochs Trained : 20
 
 - Loss curves decreased in a canonical way, through the time of the epochs.
 - SSIM values displayed steady growth, peaking around ~0.93 on the validation set.
-- Perplexity values were stabilized around 320-340, indicating robust codebook activity.
+- Perplexity values were stabilized around 320-340, indicating robust codebook activity
+![Alt text](Images/Training_Loss_SSIM_PP.jpg)
 
 
-**Codebook Usage at epoch 20**
+**Training Codebook Usage at epoch 20**
+![Alt text](Images/Training_Codebook_Usage.png)
 
 ## Prediction outputs
 
+![Alt text](Images/Prediction_Output.png)
 
 **predict_summary.json**
 
@@ -251,8 +261,11 @@ Epochs Trained : 20
 
 **Reconstruction Quality:** High structural similarity between validation and test sets, with tissue boundaries and internal contrast preserved and few artifacts or texture loss.
 
+![Alt text](Images/Reconstructed_Images.png)
 
-**Codebook usage**
+**Prediction Codebook usage**
+
+![Alt text](Images/Prediction_Codebnook_Usage.png)
 
 ## Observation and Insights
 
@@ -286,6 +299,7 @@ Future directions for this project are investigating multi-scale or hierarchical
 4. Kingma, D. P., & Welling, M. (2014). *Auto-Encoding Variational Bayes.*  *International Conference on Learning Representations (ICLR).  [https://arxiv.org/abs/1312.6114](https://arxiv.org/abs/1312.6114)
 
 5. Loshchilov, I., & Hutter, F. (2019). *Decoupled Weight Decay Regularization (AdamW).* *International Conference on Learning Representations (ICLR).[https://arxiv.org/abs/1711.05101](https://arxiv.org/abs/1711.05101)
+
 
 
 
